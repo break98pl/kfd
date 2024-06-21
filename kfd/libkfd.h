@@ -231,27 +231,27 @@ uint64_t funVnode(u64 kfd, uint64_t proc, char* filename) {
     uint32_t off_vnode_iocount = 0x64;
     uint32_t off_vnode_usecount = 0x60;
     uint32_t off_vnode_vflags = 0x54;
-    
+
     int file_index = open(filename, O_RDONLY);
     if (file_index == -1) return -1;
-    
     //get vnode
-    uint64_t filedesc_pac = kread64(kfd, proc + off_p_pfd);
-    uint64_t filedesc = filedesc_pac | 0xffffff8000000000;
-    uint64_t openedfile = kread64(kfd, filedesc + (8 * file_index));
-    uint64_t fileglob_pac = kread64(kfd, openedfile + off_fp_fglob);
-    uint64_t fileglob = fileglob_pac | 0xffffff8000000000;
-    uint64_t vnode_pac = kread64(kfd, fileglob + off_fg_data);
-    uint64_t vnode = vnode_pac | 0xffffff8000000000;
+    uint64_t filedesc = kread64(kfd, proc + off_p_pfd);
+    printf("filedesc: 0x%llx\n", filedesc);
+    uint64_t fileproc = kread64(kfd, filedesc + off_fd_ofiles);
+    printf("fileproc: 0x%llx\n", fileproc);
+//    printf("openedfile: 0x%llx\n", filedesc + (8 * file_index));
+    uint64_t openedfile = kread64(kfd, fileproc + (8 * file_index));
+    printf("openedfile: 0x%llx\n", openedfile);
+    uint64_t fileglob = kread64(kfd, openedfile + off_fp_fglob);
+    printf("fileglob: 0x%llx\n", fileglob);
+    uint64_t vnode = kread64(kfd, fileglob + off_fg_data);
     printf("vnode: 0x%llx\n", vnode);
-    
     //vnode_ref, vnode_get
     uint32_t usecount = kread32(kfd, vnode + off_vnode_usecount);
     uint32_t iocount = kread32(kfd, vnode + off_vnode_iocount);
     printf("usecount: %d, iocount: %d\n", usecount, iocount);
     kwrite32(kfd, vnode + off_vnode_usecount, usecount + 1);
     kwrite32(kfd, vnode + off_vnode_iocount, iocount + 1);
-    
 #define VISSHADOW 0x008000
     //hide file
     uint32_t v_flags = kread32(kfd, vnode + off_vnode_vflags);
@@ -261,19 +261,22 @@ uint64_t funVnode(u64 kfd, uint64_t proc, char* filename) {
     //exist test (should not be exist
     printf("[i] is File exist?: %d\n", access(filename, F_OK));
     
-    //show file
-    v_flags = kread32(kfd, vnode + off_vnode_vflags);
-    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags &= ~VISSHADOW));
-    
-    printf("[i] is File exist?: %d\n", access(filename, F_OK));
+//    //show file
+//    v_flags = kread32(kfd, vnode + off_vnode_vflags);
+//    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags &= ~VISSHADOW));
+//
+//    printf("[i] is File exist?: %d\n", access(filename, F_OK));
 
-    //restore vnode iocount, usecount
-    if(kread32(kfd, vnode + off_vnode_usecount) > 0)
-        kwrite32(kfd, vnode + off_vnode_usecount, usecount - 1);
-    if(kread32(kfd, vnode + off_vnode_iocount) > 0)
-        kwrite32(kfd, vnode + off_vnode_iocount, iocount - 1);
-    
     close(file_index);
+    
+    //restore vnode iocount, usecount
+//    usecount = kread32(kfd, vnode + off_vnode_usecount);
+//    iocount = kread32(kfd, vnode + off_vnode_iocount);
+//    if(usecount > 0)
+//        kwrite32(kfd, vnode + off_vnode_usecount, usecount - 1);
+//    if(iocount > 0)
+//        kwrite32(kfd, vnode + off_vnode_iocount, iocount - 1);
+    
 
     return 0;
 }
@@ -305,59 +308,72 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     uint64_t selfProc = ((struct kfd*)kfd)->info.kernel.current_proc;
     printf("[i] self proc: 0x%llx\n", selfProc);
     //vnode
-    uint32_t off_p_pfd = 0xf8;
-    uint32_t off_fd_ofiles = 0x0;
-    uint32_t off_fp_fglob = 0x10;
-    uint32_t off_fg_data = 0x38;
-    uint32_t off_vnode_iocount = 0x64;
-    uint32_t off_vnode_usecount = 0x60;
-    uint32_t off_vnode_vflags = 0x54;
-    char* filename = "/System/Library/Audio/UISounds/photoShutter.caf";
-    int file_index = open(filename, O_RDONLY);
-    if (file_index == -1) return -1;
-    //get vnode
-    uint64_t filedesc = kread64(kfd, selfProc + off_p_pfd);
-    printf("filedesc: 0x%llx\n", filedesc);
-    uint64_t fileproc = kread64(kfd, filedesc + off_fd_ofiles);
-    printf("fileproc: 0x%llx\n", fileproc);
-//    printf("openedfile: 0x%llx\n", filedesc + (8 * file_index));
-    uint64_t openedfile = kread64(kfd, fileproc + (8 * file_index));
-    printf("openedfile: 0x%llx\n", openedfile);
-    uint64_t fileglob = kread64(kfd, openedfile + off_fp_fglob);
-    printf("fileglob: 0x%llx\n", fileglob);
-    uint64_t vnode = kread64(kfd, fileglob + off_fg_data);
-    printf("vnode: 0x%llx\n", vnode);
-    //vnode_ref, vnode_get
-    uint32_t usecount = kread32(kfd, vnode + off_vnode_usecount);
-    uint32_t iocount = kread32(kfd, vnode + off_vnode_iocount);
-    printf("usecount: %d, iocount: %d\n", usecount, iocount);
-    kwrite32(kfd, vnode + off_vnode_usecount, usecount + 1);
-    kwrite32(kfd, vnode + off_vnode_iocount, iocount + 1);
-#define VISSHADOW 0x008000
-    //hide file
-    uint32_t v_flags = kread32(kfd, vnode + off_vnode_vflags);
-    printf("v_flags: 0x%x\n", v_flags);
-    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags | VISSHADOW));
-
-    //exist test (should not be exist
-    printf("[i] is File exist?: %d\n", access(filename, F_OK));
-    
-    //show file
-    v_flags = kread32(kfd, vnode + off_vnode_vflags);
-    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags &= ~VISSHADOW));
-    
-    printf("[i] is File exist?: %d\n", access(filename, F_OK));
-
-    close(file_index);
-    
-    //restore vnode iocount, usecount
-    usecount = kread32(kfd, vnode + off_vnode_usecount);
-    iocount = kread32(kfd, vnode + off_vnode_iocount);
-    if(usecount > 0)
-        kwrite32(kfd, vnode + off_vnode_usecount, usecount - 1);
-    if(iocount > 0)
-        kwrite32(kfd, vnode + off_vnode_iocount, iocount - 1);
-    
+    funVnode(kfd, selfProc, "/Applications/Cydia.app");
+    funVnode(kfd, selfProc, "/Applications/SafeMode.app");
+    funVnode(kfd, selfProc, "/Applications/Sileo.app");
+    funVnode(kfd, selfProc, "/Applications/Zebra.app");
+    funVnode(kfd, selfProc, "/bin/bash");
+    funVnode(kfd, selfProc, "/bin/bunzip2");
+    funVnode(kfd, selfProc, "/bin/bzip2");
+    funVnode(kfd, selfProc, "/bin/cat");
+    funVnode(kfd, selfProc, "/bin/chgrp");
+    funVnode(kfd, selfProc, "/bin/chmod");
+    funVnode(kfd, selfProc, "/bin/chown");
+    funVnode(kfd, selfProc, "/bin/cp");
+    funVnode(kfd, selfProc, "/bin/grep");
+    funVnode(kfd, selfProc, "/bin/gzip");
+    funVnode(kfd, selfProc, "/bin/kill");
+    funVnode(kfd, selfProc, "/bin/ln");
+    funVnode(kfd, selfProc, "/bin/ls");
+    funVnode(kfd, selfProc, "/bin/mkdir");
+    funVnode(kfd, selfProc, "/bin/mv");
+    funVnode(kfd, selfProc, "/bin/sed");
+    funVnode(kfd, selfProc, "/bin/sh");
+    funVnode(kfd, selfProc, "/bin/su");
+    funVnode(kfd, selfProc, "/bin/tar");
+    funVnode(kfd, selfProc, "/binpack");
+    funVnode(kfd, selfProc, "/bootstrap");
+    funVnode(kfd, selfProc, "/chimera");
+    funVnode(kfd, selfProc, "/electra");
+    funVnode(kfd, selfProc, "/etc/apt");
+    funVnode(kfd, selfProc, "/etc/profile");
+    funVnode(kfd, selfProc, "/jb");
+    funVnode(kfd, selfProc, "/Library/dpkg/info/com.inoahdev.launchinsafemode.list");
+    funVnode(kfd, selfProc, "/Library/dpkg/info/com.inoahdev.launchinsafemode.md5sums");
+    funVnode(kfd, selfProc, "/Library/Frameworks/CydiaSubstrate.framework");
+    funVnode(kfd, selfProc, "/Library/MobileSubstrate/DynamicLibraries/FlyJB.dylb");
+    funVnode(kfd, selfProc, "/Library/MobileSubstrate/MobileSubstrate.dylib");
+    funVnode(kfd, selfProc, "/Library/PreferenceBundles/LaunchInSafeMode.bundle");
+    funVnode(kfd, selfProc, "/Library/PreferenceLoader/Preferences/LaunchInSafeMode.plist");
+    funVnode(kfd, selfProc, "/Library/Themes");
+    funVnode(kfd, selfProc, "/private/var/binpack");
+    funVnode(kfd, selfProc, "/private/var/checkra1n.dmg");
+    funVnode(kfd, selfProc, "/private/var/lib/apt");
+    funVnode(kfd, selfProc, "/usr/bin/diff");
+    funVnode(kfd, selfProc, "/usr/bin/hostinfo");
+    funVnode(kfd, selfProc, "/usr/bin/killall");
+    funVnode(kfd, selfProc, "/usr/bin/passwd");
+    funVnode(kfd, selfProc, "/usr/bin/recache");
+    funVnode(kfd, selfProc, "/usr/bin/tar");
+    funVnode(kfd, selfProc, "/usr/bin/which");
+    funVnode(kfd, selfProc, "/usr/bin/xargs");
+    funVnode(kfd, selfProc, "/usr/lib/libjailbreak.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.0.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/libsubstrate.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/substitute-loader.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/SBInject");
+    funVnode(kfd, selfProc, "/usr/lib/SBInject.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/TweakInject");
+    funVnode(kfd, selfProc, "/usr/lib/TweakInject.dylib");
+    funVnode(kfd, selfProc, "/usr/lib/TweakInjectMapsCheck.dylib");
+    funVnode(kfd, selfProc, "/usr/libexec/sftp-server");
+    funVnode(kfd, selfProc, "/usr/sbin/sshd");
+    funVnode(kfd, selfProc, "/usr/share/terminfo");
+    funVnode(kfd, selfProc, "/var/mobile/Library/.sbinjectSafeMode");
+    funVnode(kfd, selfProc, "/var/mobile/fakevar");
+    funVnode(kfd, selfProc, "/var/MobileSoftwareUpdate/mnt1/fakevar");
+    funVnode(kfd, selfProc, "/usr/lib/libhooker.dylib");
     
     puaf_cleanup(kfd);
     timer_end();
