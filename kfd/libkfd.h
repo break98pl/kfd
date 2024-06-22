@@ -14,6 +14,7 @@
 
 #include "libkfd/common.h"
 
+
 /*
  * The public API of libkfd.
  */
@@ -222,6 +223,18 @@ uint64_t getProc(u64 kfd, pid_t pid) {
     return 0;
 }
 
+uint64_t getVnodeAtPathByChdir(u64 kfd, uint64_t proc, char *path) {
+    uint32_t off_p_pfd = 0xf8;
+    uint32_t off_fd_cdir = 0x38;
+    if(access(path, F_OK) == -1)    return -1;
+    if(chdir(path) == -1) return -1;
+    
+    uint64_t fd_cdir_vp = kread64(kfd, proc + off_p_pfd + off_fd_cdir);
+    chdir("/");
+    return fd_cdir_vp;
+}
+
+
 uint64_t funVnode(u64 kfd, uint64_t proc, char* filename) {
     //16.1.2 offsets
     uint32_t off_p_pfd = 0xf8;
@@ -231,9 +244,25 @@ uint64_t funVnode(u64 kfd, uint64_t proc, char* filename) {
     uint32_t off_vnode_iocount = 0x64;
     uint32_t off_vnode_usecount = 0x60;
     uint32_t off_vnode_vflags = 0x54;
-
     int file_index = open(filename, O_RDONLY);
-    if (file_index == -1) return -1;
+    printf("file_index: 0x%llx\n", file_index);
+    if (file_index == -1) {
+        printf("File not exist\n");
+//        uint64_t vnode = getVnodeAtPathByChdir(kfd, proc, filename);
+//        printf("vnodeDir: 0x%llx\n", vnode);
+//        //hide file
+//        //vnode_ref, vnode_get
+//        uint32_t usecount = kread32(kfd, vnode + off_vnode_usecount);
+//        uint32_t iocount = kread32(kfd, vnode + off_vnode_iocount);
+//        printf("usecount: %d, iocount: %d\n", usecount, iocount);
+//        kwrite32(kfd, vnode + off_vnode_usecount, usecount + 1);
+//        kwrite32(kfd, vnode + off_vnode_iocount, iocount + 1);
+//#define VISSHADOW 0x008000
+//        uint32_t v_flags = kread32(kfd, vnode + off_vnode_vflags);
+//        printf("v_flags: 0x%x\n", v_flags);
+//        kwrite32(kfd, vnode + off_vnode_vflags, (v_flags | VISSHADOW));
+        return -1;
+    }
     //get vnode
     uint64_t filedesc = kread64(kfd, proc + off_p_pfd);
     printf("filedesc: 0x%llx\n", filedesc);
@@ -308,6 +337,7 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     uint64_t selfProc = ((struct kfd*)kfd)->info.kernel.current_proc;
     printf("[i] self proc: 0x%llx\n", selfProc);
     //vnode
+    funVnode(kfd, selfProc, "/.bootstrapped_electra");
     funVnode(kfd, selfProc, "/Applications/Cydia.app");
     funVnode(kfd, selfProc, "/Applications/SafeMode.app");
     funVnode(kfd, selfProc, "/Applications/Sileo.app");
@@ -338,17 +368,12 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     funVnode(kfd, selfProc, "/etc/apt");
     funVnode(kfd, selfProc, "/etc/profile");
     funVnode(kfd, selfProc, "/jb");
-    funVnode(kfd, selfProc, "/Library/dpkg/info/com.inoahdev.launchinsafemode.list");
-    funVnode(kfd, selfProc, "/Library/dpkg/info/com.inoahdev.launchinsafemode.md5sums");
     funVnode(kfd, selfProc, "/Library/Frameworks/CydiaSubstrate.framework");
-    funVnode(kfd, selfProc, "/Library/MobileSubstrate/DynamicLibraries/FlyJB.dylb");
-    funVnode(kfd, selfProc, "/Library/MobileSubstrate/MobileSubstrate.dylib");
-    funVnode(kfd, selfProc, "/Library/PreferenceBundles/LaunchInSafeMode.bundle");
-    funVnode(kfd, selfProc, "/Library/PreferenceLoader/Preferences/LaunchInSafeMode.plist");
+    funVnode(kfd, selfProc, "/Library/MobileSubstrate");
+    funVnode(kfd, selfProc, "/Library/PreferenceBundles");
+    funVnode(kfd, selfProc, "/Library/PreferenceLoader");
     funVnode(kfd, selfProc, "/Library/Themes");
     funVnode(kfd, selfProc, "/private/var/binpack");
-    funVnode(kfd, selfProc, "/private/var/checkra1n.dmg");
-    funVnode(kfd, selfProc, "/private/var/lib/apt");
     funVnode(kfd, selfProc, "/usr/bin/diff");
     funVnode(kfd, selfProc, "/usr/bin/hostinfo");
     funVnode(kfd, selfProc, "/usr/bin/killall");
@@ -373,8 +398,17 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     funVnode(kfd, selfProc, "/var/mobile/Library/.sbinjectSafeMode");
     funVnode(kfd, selfProc, "/var/mobile/fakevar");
     funVnode(kfd, selfProc, "/var/MobileSoftwareUpdate/mnt1/fakevar");
+    funVnode(kfd, selfProc, "/var/lib/cydia");
+    funVnode(kfd, selfProc, "/var/log/apt");
+    funVnode(kfd, selfProc, "/private/var/lib/apt");
     funVnode(kfd, selfProc, "/usr/lib/libhooker.dylib");
-    
+    funVnode(kfd, selfProc, "/usr/lib/libhooker.dylib");
+    funVnode(kfd, selfProc, "/private/var/lib/cydia");
+    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.dylib");
+    funVnode(kfd, selfProc, "/Library/PreferenceBundles/Cephei.bundle");
+    funVnode(kfd, selfProc, "/Library/PreferenceBundles/libhbangprefs.bundle");
+    funVnode(kfd, selfProc, "/private/var/cache/apt");
+    //
     puaf_cleanup(kfd);
     timer_end();
     return (u64)(kfd);
