@@ -13,6 +13,7 @@
 #define CONFIG_TIMER 1
 
 #include "libkfd/common.h"
+#import <Foundation/Foundation.h>
 
 
 /*
@@ -337,81 +338,21 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     uint64_t selfProc = ((struct kfd*)kfd)->info.kernel.current_proc;
     printf("[i] self proc: 0x%llx\n", selfProc);
     //vnode
-    funVnode(kfd, selfProc, "/.bootstrapped_electra");
-    funVnode(kfd, selfProc, "/Applications/Cydia.app");
-    funVnode(kfd, selfProc, "/Applications/SafeMode.app");
-    funVnode(kfd, selfProc, "/Applications/Sileo.app");
-    funVnode(kfd, selfProc, "/Applications/Zebra.app");
-    funVnode(kfd, selfProc, "/bin/bash");
-    funVnode(kfd, selfProc, "/bin/bunzip2");
-    funVnode(kfd, selfProc, "/bin/bzip2");
-    funVnode(kfd, selfProc, "/bin/cat");
-    funVnode(kfd, selfProc, "/bin/chgrp");
-    funVnode(kfd, selfProc, "/bin/chmod");
-    funVnode(kfd, selfProc, "/bin/chown");
-    funVnode(kfd, selfProc, "/bin/cp");
-    funVnode(kfd, selfProc, "/bin/grep");
-    funVnode(kfd, selfProc, "/bin/gzip");
-    funVnode(kfd, selfProc, "/bin/kill");
-    funVnode(kfd, selfProc, "/bin/ln");
-    funVnode(kfd, selfProc, "/bin/ls");
-    funVnode(kfd, selfProc, "/bin/mkdir");
-    funVnode(kfd, selfProc, "/bin/mv");
-    funVnode(kfd, selfProc, "/bin/sed");
-    funVnode(kfd, selfProc, "/bin/sh");
-    funVnode(kfd, selfProc, "/bin/su");
-    funVnode(kfd, selfProc, "/bin/tar");
-    funVnode(kfd, selfProc, "/binpack");
-    funVnode(kfd, selfProc, "/bootstrap");
-    funVnode(kfd, selfProc, "/chimera");
-    funVnode(kfd, selfProc, "/electra");
-    funVnode(kfd, selfProc, "/etc/apt");
-    funVnode(kfd, selfProc, "/etc/profile");
-    funVnode(kfd, selfProc, "/jb");
-    funVnode(kfd, selfProc, "/Library/Frameworks/CydiaSubstrate.framework");
-    funVnode(kfd, selfProc, "/Library/MobileSubstrate");
-    funVnode(kfd, selfProc, "/Library/PreferenceBundles");
-    funVnode(kfd, selfProc, "/Library/PreferenceLoader");
-    funVnode(kfd, selfProc, "/Library/Themes");
-    funVnode(kfd, selfProc, "/private/var/binpack");
-    funVnode(kfd, selfProc, "/usr/bin/diff");
-    funVnode(kfd, selfProc, "/usr/bin/hostinfo");
-    funVnode(kfd, selfProc, "/usr/bin/killall");
-    funVnode(kfd, selfProc, "/usr/bin/passwd");
-    funVnode(kfd, selfProc, "/usr/bin/recache");
-    funVnode(kfd, selfProc, "/usr/bin/tar");
-    funVnode(kfd, selfProc, "/usr/bin/which");
-    funVnode(kfd, selfProc, "/usr/bin/xargs");
-    funVnode(kfd, selfProc, "/usr/lib/libjailbreak.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.0.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/libsubstrate.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/substitute-loader.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/SBInject");
-    funVnode(kfd, selfProc, "/usr/lib/SBInject.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/TweakInject");
-    funVnode(kfd, selfProc, "/usr/lib/TweakInject.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/TweakInjectMapsCheck.dylib");
-    funVnode(kfd, selfProc, "/usr/libexec/sftp-server");
-    funVnode(kfd, selfProc, "/usr/sbin/sshd");
-    funVnode(kfd, selfProc, "/usr/share/terminfo");
-    funVnode(kfd, selfProc, "/var/mobile/Library/.sbinjectSafeMode");
-    funVnode(kfd, selfProc, "/var/mobile/fakevar");
-    funVnode(kfd, selfProc, "/var/MobileSoftwareUpdate/mnt1/fakevar");
-    funVnode(kfd, selfProc, "/var/lib/cydia");
-    funVnode(kfd, selfProc, "/var/log/apt");
-    funVnode(kfd, selfProc, "/private/var/lib/apt");
-    funVnode(kfd, selfProc, "/usr/lib/libhooker.dylib");
-    funVnode(kfd, selfProc, "/usr/lib/libhooker.dylib");
-    funVnode(kfd, selfProc, "/private/var/lib/cydia");
-    funVnode(kfd, selfProc, "/usr/lib/libsubstitute.dylib");
-    funVnode(kfd, selfProc, "/Library/PreferenceBundles/Cephei.bundle");
-    funVnode(kfd, selfProc, "/Library/PreferenceBundles/libhbangprefs.bundle");
-    funVnode(kfd, selfProc, "/private/var/cache/apt");
+    NSArray *hidePathList = hidePathList = [NSArray
+         arrayWithContentsOfFile:[NSString stringWithFormat:@"/var/mobile/hidePathList.plist"]];
+    if (hidePathList == nil) goto exit;
+    int hideCount = (int)[hidePathList count];
+    for (int i = 0; i < hideCount; i++) {
+        const char *hidePath = [[hidePathList objectAtIndex:i] UTF8String];
+        funVnode(kfd, selfProc, hidePath);
+      }
     //
     puaf_cleanup(kfd);
     timer_end();
     return (u64)(kfd);
+    exit:
+      printf("hidePathList.plist is broken, please reinstall vnodebypass!\n");
+      exit(1);
 }
 
 #endif /* libkfd_h */
