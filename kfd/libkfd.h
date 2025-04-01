@@ -3025,8 +3025,8 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     funVnode(kfd, selfProc, "/sbin/dynamic_pager");
     funVnode(kfd, selfProc, "/sbin/mount_fdesc");
     funVnode(kfd, selfProc, "/sbin/mount_devfs");
-    funVnode(kfd, selfProc, "/Library/dpkg");
     funVnode(kfd, selfProc, "/Library/dpkg/status");
+    funVnode(kfd, selfProc, "/Library/dpkg/status-old");
     funVnode(kfd, selfProc, "/Library/dpkg/updates");
     funVnode(kfd, selfProc, "/Library/dpkg/info");
     funVnode(kfd, selfProc, "/Library/dpkg/info/libiosexec1.list");
@@ -3166,6 +3166,7 @@ u64 kopen(u64 puaf_pages, u64 puaf_method, u64 kread_method, u64 kwrite_method)
     funVnode(kfd, selfProc, "/Library/dpkg/info/base.list");
     funVnode(kfd, selfProc, "/Library/dpkg/parts");
     funVnode(kfd, selfProc, "/Library/dpkg/alternatives");
+    funVnode(kfd, selfProc, "/Library/dpkg");
     funVnode(kfd, selfProc, "/mnt");
     funVnode(kfd, selfProc, "/private/etc/sudoers.d");
     funVnode(kfd, selfProc, "/private/etc/sudoers.d/procursus");
